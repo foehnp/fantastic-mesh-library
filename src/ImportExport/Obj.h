@@ -20,13 +20,23 @@ template <typename realType>
 bool importMesh(const std::string& filePath, Mesh<realType>& mesh);
 
 
+/**
+ * @brief Exports a mesh into the 'obj' format file as in the repo https://github.com/alecjacobson/common-3d-test-models
+ * @param filePath input
+ * @param mesh input
+ * @return whether success
+ */
+template <typename realType>
+bool exportMesh(const std::string& filePath, const Mesh<realType>& mesh);
 
-// definitions
+
+// Implementations
 
 template <typename realType>
 bool importMesh(const std::string& filePath, Mesh<realType>& mesh)
 {
     std::ifstream ifs(filePath);
+    mesh = Mesh<realType>();
 
     if (!ifs.is_open())
     {
@@ -98,7 +108,35 @@ bool importMesh(const std::string& filePath, Mesh<realType>& mesh)
         }
     }
 
+    ifs.close();
+
     mesh = Mesh(vertices, triangles);
+
+    return true;
+}
+
+template <typename realType>
+bool exportMesh(const std::string& filePath, const Mesh<realType>& mesh)
+{
+    std::ofstream ofs(filePath);
+
+    if (!ofs.is_open())
+    {
+        return false;
+    }
+
+    std::vector<Eigen::Vector3<realType>> points = mesh.getVerticesAsVectors();
+    for (auto& p : points)
+    {
+        ofs << "v " << p(0) << " " << p(1) << " " << p(2) << std::endl;
+    }
+
+    for (size_t i = 0; i < mesh.numTriangles(); ++i)
+    {
+        const Triangle<realType>& t = *mesh.getTriangle(i);
+        ofs << "f " << t.vertex(0)+1 << " " << t.vertex(1)+1 << " " << t.vertex(2)+1 << std::endl;
+    }
+    ofs.close();
 
     return true;
 }
