@@ -15,7 +15,7 @@ public:
 
     void setVertex(size_t which, size_t idx);
 
-    size_t vertex(size_t which);
+    size_t vertex(size_t which) const;
 
 private:
     size_t vertices[3];
@@ -41,7 +41,7 @@ inline void Triangle<realType>::setVertex(size_t which, size_t idx)
 }
 
 template<typename realType>
-size_t Triangle<realType>::vertex(size_t which)
+size_t Triangle<realType>::vertex(size_t which) const
 {
     return vertices[which];
 }
