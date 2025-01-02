@@ -1,6 +1,8 @@
 #ifndef OCTREE_H
 #define OCTREE_H
 
+#include "Algo/GeometryUtility.h"
+
 #include <Eigen/Core>
 
 #include <forward_list>
@@ -32,7 +34,11 @@ struct OctNode
 }
 
 
-
+/**
+ * @brief The Octree class
+ * Creates an octree given a list of points in n*log(n) time, where n is the number of points
+ * Allowes log(n) nearest neighbor search.
+ */
 template<typename realType>
 class Octree
 {
@@ -52,13 +58,22 @@ public:
 
 private:
 
-    /* subdivides inNode into 8 subnodes if it contains more than one points and at least
-     *  one of the sides of its cuboid is wider than tol
-     *
-     * returns  false if no subdivision had to be done
-     **/
+    /**
+     * @brief meiosis subdivides the box of inNode into 8 subboxes
+     *  (if at least one of the sides of its cuboid is wider than tol).
+     *  Assigns each point to the box it is contained in. A child node is created
+     *  for each non-empty sub-box.
+     * @param inNode
+     * @param tol
+     * @return
+     */
     bool meiosis(OctNode<realType>& inNode, realType tol);
 
+    /**
+     * @brief recursiveMeiosis performs meiosis on inNode and recursively on its new children
+     * @param inNode
+     * @param tol
+     */
     void recursiveMeiosis(OctNode<realType>& inNode, realType tol);
 
 };
@@ -92,44 +107,6 @@ Octree<realType>::Octree(const std::vector<Eigen::Vector3<realType>> &points, re
     recursiveMeiosis(m_rootNode, m_tol);
 }
 
-namespace {
-
-template<typename realType>
-realType distToBoxSqrd(const std::vector<Eigen::Vector3<realType>>& box, const Eigen::Vector3<realType> &point)
-{
-    Eigen::Vector3<realType> effDist;
-    for (int d = 0; d < 3; ++d)
-    {
-        if (point(d) < box[0](d))
-        {
-            effDist(d) = box[0](d) - point(d);
-        }
-        else if (point(d) <= box[1](d))
-        {
-            effDist(d) = 0.;
-        }
-        else
-        {
-            effDist(d) = point(d) - box[1](d);
-        }
-    }
-    return effDist.squaredNorm();
-}
-
-template<typename realType>
-realType maxDistOfBoxSqrd(const std::vector<Eigen::Vector3<realType>>& box, const Eigen::Vector3<realType> &point)
-{
-    Eigen::Vector3<realType> effDist;
-    for (int d = 0; d < 3; ++d)
-    {
-        realType leftDist = fabs(point(d) - box[0](d));
-        realType rightDist = fabs(point(d) - box[1](d));
-        effDist(d) = (leftDist < rightDist) ? rightDist : leftDist;
-    }
-    return effDist.squaredNorm();
-}
-
-}
 
 template<typename realType>
 size_t Octree<realType>::nearestPoint(const Eigen::Vector3<realType> &point, realType maxDist) const
@@ -141,14 +118,14 @@ size_t Octree<realType>::nearestPoint(const Eigen::Vector3<realType> &point, rea
         realType minMaxDist = std::numeric_limits<realType>::max();
         for (const OctNode<realType>* node : nodes)
         {
-            minMaxDist = std::min(minMaxDist, maxDistOfBoxSqrd(node->bounds, point));
+            minMaxDist = std::min(minMaxDist, Util::maxDistOfBoxSqrd(node->bounds, point));
         }
 
         std::forward_list<const OctNode<realType>*> newNodes;
         bool anyNewNodes = false;
         for (const OctNode<realType>* node : nodes)
         {
-            if (distToBoxSqrd(node->bounds, point) < minMaxDist)
+            if (Util::distToBoxSqrd(node->bounds, point) < minMaxDist)
             {
                 if (node->children.empty())
                 {
@@ -174,12 +151,14 @@ size_t Octree<realType>::nearestPoint(const Eigen::Vector3<realType> &point, rea
             realType closestDist = std::numeric_limits<realType>::max();
             for (const OctNode<realType>* node : nodes)
             {
-                size_t currPointIdx = node->points[0];
-                realType dist = (m_points[currPointIdx] - point).squaredNorm();
-                if (dist < closestDist)
+                for (size_t currPointIdx : node->points)
                 {
-                    closestPoint = currPointIdx;
-                    closestDist = dist;
+                    realType dist = (m_points[currPointIdx] - point).squaredNorm();
+                    if (dist < closestDist)
+                    {
+                        closestPoint = currPointIdx;
+                        closestDist = dist;
+                    }
                 }
             }
             return closestPoint;
@@ -205,7 +184,7 @@ bool Octree<realType>::meiosis(OctNode<realType> &inNode, realType tol)
     {
         if (inNode.bounds[1](0) - inNode.bounds[0](0) < tol)
         {
-            ++d;
+            ++tooSmallDims;
         }
     }
     if (tooSmallDims == 3)

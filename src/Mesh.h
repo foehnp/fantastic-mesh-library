@@ -35,6 +35,8 @@ public:
 
     const Triangle<realType>* getTriangle(size_t idx) const;
 
+    std::vector<std::vector<Eigen::Vector3<realType>>> getTrianglesAsVector() const;
+
     size_t numVertices() const;
 
     Vertex<realType>* getVertex(size_t idx);
@@ -85,6 +87,23 @@ template<typename realType>
 inline const Triangle<realType> *Mesh<realType>::getTriangle(size_t idx) const
 {
     return &triangles[idx];
+}
+
+template<typename realType>
+inline std::vector<std::vector<Eigen::Vector3<realType>>> Mesh<realType>::getTrianglesAsVector() const
+{
+    std::vector<std::vector<Eigen::Vector3<realType>>> res;
+    res.reserve(triangles.size());
+    for (int i = 0; i < triangles.size(); ++i)
+    {
+        const Triangle<realType>& t = triangles[i];
+        std::vector<Eigen::Vector3<realType>> triangle(3);
+        triangle[0] = vertices[t.vertex(0)];
+        triangle[1] = vertices[t.vertex(1)];
+        triangle[2] = vertices[t.vertex(2)];
+        res.push_back(std::move(triangle));
+    }
+    return res;
 }
 
 template<typename realType>

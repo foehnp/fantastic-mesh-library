@@ -14,7 +14,9 @@ QMAKE_CXXFLAGS_DEBUG += -O0
 SOURCES +=
 
 HEADERS += \
+    Algo/GeometryUtility.h \
     Algo/Octree.h \
+    Algo/TriangleOctree.h \
     Halfedge.h \
     ImportExport/Obj.h \
     LineCol.h \
