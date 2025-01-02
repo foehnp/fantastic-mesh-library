@@ -25,12 +25,13 @@ struct PolygonOctNode
         bounds(2)
     {}
 
-    ~PolygonOctNode()
+    void destroyChildren()
     {
         for (const auto child : children)
         {
             if (child)
             {
+                child->destroyChildren();
                 delete child;
             }
         }
@@ -60,6 +61,7 @@ private:
 public:
     TriangleOctree(const std::vector<Polygon<realType>>& polygons, realType tol = 1e-2, size_t maxPolygonsPerNode = 15);
 
+    ~TriangleOctree();
 
     size_t nearestPoint(const Eigen::Vector3<realType>& point, realType maxDist) const;
 
@@ -119,6 +121,12 @@ TriangleOctree<realType>::TriangleOctree(const std::vector<std::vector<Eigen::Ve
         m_rootNode.polygons[i] = {i, polygons[i]};
     }
     recursiveMeiosis(m_rootNode, m_tol, m_maxPolygonsPerNode);
+}
+
+template<typename realType>
+inline TriangleOctree<realType>::~TriangleOctree()
+{
+    m_rootNode.destroyChildren();
 }
 
 

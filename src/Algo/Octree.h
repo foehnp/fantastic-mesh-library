@@ -22,11 +22,15 @@ struct OctNode
         bounds(2)
     {}
 
-    ~OctNode()
+    void destroyChildren()
     {
         for (const auto child : children)
         {
-            delete child;
+            if (child)
+            {
+                child->destroyChildren();
+                delete child;
+            }
         }
     }
 };
@@ -52,6 +56,8 @@ private:
 
 public:
     Octree(const std::vector<Eigen::Vector3<realType>>& points, realType tol);
+
+    ~Octree();
 
 
     size_t nearestPoint(const Eigen::Vector3<realType>& point, realType maxDist) const;
@@ -105,6 +111,12 @@ Octree<realType>::Octree(const std::vector<Eigen::Vector3<realType>> &points, re
         m_rootNode.points[i] = i;
     }
     recursiveMeiosis(m_rootNode, m_tol);
+}
+
+template<typename realType>
+inline Octree<realType>::~Octree()
+{
+    m_rootNode.destroyChildren();
 }
 
 
