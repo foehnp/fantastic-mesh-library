@@ -5,8 +5,9 @@
 
 #include <Eigen/Core>
 
-#include <forward_list>
+#include <queue>
 #include <vector>
+
 
 namespace FML {
 
@@ -15,6 +16,7 @@ namespace {
 template<typename realType>
 struct OctNode
 {
+    bool isPoint = false; // if this is true, the box is just a point, with coords bound[0]
     std::vector<Eigen::Vector3<realType>> bounds;
     std::vector<OctNode<realType>*> children;
     std::vector<size_t> points;
@@ -120,72 +122,102 @@ inline Octree<realType>::~Octree()
 }
 
 
+namespace {
+
+template<typename realType>
+realType distToNodeSqrd(const OctNode<realType>& node, const Eigen::Vector3<realType>& point)
+{
+    if (node.isPoint)
+    {
+        return (node.bounds[0]-point).squaredNorm();
+    }
+    else
+    {
+        return Util::distToBoxSqrd(node.bounds, point);
+    }
+}
+
+template<typename realType>
+realType maxDistOfNodeSqrd(const OctNode<realType>& node, const Eigen::Vector3<realType>& point)
+{
+    if (node.isPoint)
+    {
+        return (node.bounds[0]-point).squaredNorm();
+    }
+    else
+    {
+        return Util::maxDistOfBoxSqrd(node.bounds, point);
+    }
+}
+
+}
+
+
 template<typename realType>
 size_t Octree<realType>::nearestPoint(const Eigen::Vector3<realType> &point, realType maxDist) const
 {
-    std::forward_list<const OctNode<realType>*> nodes;
-    nodes.push_front(&m_rootNode);
-    while (true)
+    auto compare = [](const std::pair<realType, const OctNode<realType>*>& left, const std::pair<realType, const OctNode<realType>*>& right)
+    {return left.first > right.first;};
+    std::priority_queue<std::pair<realType, const OctNode<realType>*>,
+                        std::vector<std::pair<realType, const OctNode<realType>*>>,
+                        decltype(compare)>
+        prQueue(compare);
+    prQueue.emplace(distToNodeSqrd(m_rootNode, point), &m_rootNode);
+    while (!prQueue.top().second->isPoint)
     {
-        realType minMaxDist = std::numeric_limits<realType>::max();
-        for (const OctNode<realType>* node : nodes)
+        const OctNode<realType>* node = prQueue.top().second;
+        prQueue.pop();
+        for (const OctNode<realType>* child : node->children)
         {
-            minMaxDist = std::min(minMaxDist, Util::maxDistOfBoxSqrd(node->bounds, point));
-        }
-
-        std::forward_list<const OctNode<realType>*> newNodes;
-        bool anyNewNodes = false;
-        for (const OctNode<realType>* node : nodes)
-        {
-            if (Util::distToBoxSqrd(node->bounds, point) < minMaxDist)
+            if (child)
             {
-                if (node->children.empty())
-                {
-                    newNodes.push_front(node);
-                }
-                else
-                {
-                    anyNewNodes = true;
-                    for (auto child : node->children)
-                    {
-                        if (child != nullptr)
-                        {
-                            newNodes.push_front(child);
-                        }
-                    }
-                }
+                prQueue.emplace(distToNodeSqrd(*child, point), child);
             }
         }
-
-        if (!anyNewNodes)
-        {
-            size_t closestPoint;
-            realType closestDist = std::numeric_limits<realType>::max();
-            for (const OctNode<realType>* node : nodes)
-            {
-                for (size_t currPointIdx : node->points)
-                {
-                    realType dist = (m_points[currPointIdx] - point).squaredNorm();
-                    if (dist < closestDist)
-                    {
-                        closestPoint = currPointIdx;
-                        closestDist = dist;
-                    }
-                }
-            }
-            return closestPoint;
-        }
-
-        nodes = std::move(newNodes);
     }
-    return SIZE_MAX;
+    return prQueue.top().second->points[0];
 }
 
 template<typename realType>
 bool Octree<realType>::meiosis(OctNode<realType> &inNode, realType tol)
 {
-    if (inNode.points.size() < 2)
+    size_t inNodeNumPoints = inNode.points.size();
+    if (inNode.points.size() == 0)
     {
+        inNode.isPoint = true;
+        inNode.bounds[0] = m_points[inNode.points[0]];
+        return false;
+    }
+    if (inNode.points.size() < 9)
+    {
+        // We make a point child node for each point instead of splitting the box into subboxes
+        inNode.children.resize(8);
+        for (size_t i = 0; i < inNodeNumPoints; ++i)
+        {
+            size_t point = inNode.points[i];
+            const Eigen::Vector3<realType>& pointCoord = m_points[point];
+            int matchedChildIdx = -1;
+            for (size_t j = 0; j < i; ++j)
+            {
+                if (pointCoord == m_points[inNode.points[j]])
+                {
+                    matchedChildIdx = j;
+                    break;
+                }
+            }
+            if (matchedChildIdx == -1)
+            {
+                inNode.children[i] = new OctNode<realType>();
+                inNode.children[i]->isPoint = true;
+                inNode.children[i]->bounds[0] = pointCoord;
+                inNode.children[i]->points.push_back(point);
+            }
+            else
+            {
+                inNode.children[i] = nullptr;
+                inNode.children[matchedChildIdx]->points.push_back(point);
+            }
+        }
         // No need to further split node
         return false;
     }
